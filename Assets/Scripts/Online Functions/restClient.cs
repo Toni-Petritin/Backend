@@ -28,9 +28,48 @@ public class User
 
 public class Thread
 {
+    public int id;
+    public string title;
+    public int author;
+    public string created;
+    public int hidden;
+
     public static Thread CreateFromJSON(string jsonString)
     {
         return JsonUtility.FromJson<Thread>(jsonString);
+    }
+}
+
+public class Message
+{
+    public int id;
+    public int thread;
+    public string content;
+    public string title;
+    public int author;
+    public int replyto;
+    public string created;
+    public string modified;
+    public int hidden;
+
+    public static Message CreateFromJSON(string jsonString)
+    {
+        return JsonUtility.FromJson<Message>(jsonString);
+    }
+}
+
+public class Score
+{
+    public int id;
+    public int userid;
+    public int currentscore;
+    public int locationX;
+    public int locationY;
+    public int hidden;
+
+    public static Score CreateFromJSON(string jsonString)
+    {
+        return JsonUtility.FromJson<Score>(jsonString);
     }
 }
 
@@ -136,6 +175,13 @@ public class restClient : MonoBehaviour
                 + "\nYou're logged in as " + currUser[0].username;
         }
     }
+
+    IEnumerator SaveScore(int score)
+    {
+        while (!loggedIn) yield return new WaitForSeconds(10);
+        UnityWebRequest www = UnityWebRequest.Put(baseurl + "/score", "blaa"); // TODO
+    }
+
 
     // Update is called once per frame
     void Update()
