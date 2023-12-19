@@ -25,6 +25,7 @@ public class User
 
 }
 
+[System.Serializable]
 public class Thread
 {
     public int id;
@@ -39,6 +40,7 @@ public class Thread
     }
 }
 
+[System.Serializable]
 public class Message
 {
     public int id;
@@ -57,6 +59,7 @@ public class Message
     }
 }
 
+[System.Serializable]
 public class Score
 {
     public int id;
@@ -126,18 +129,10 @@ public class restClient : MonoBehaviour
     private float _timer;
     private float scoreSaveInterval = 2;
 
-    // Start is called before the first frame update
-    //void Start()
-    //{
-    //    StartCoroutine(Login("anton", "anton1"));
-    //    //StartCoroutine(PollThreads());
-    //    StartCoroutine(PollUsers());
-    //}
-
     private void Update()
     {
         // As long as we are logged in and have created a userScore we try to save the score on an interval.
-        if (loggedIn && userScore.Length != 0)
+        if (loggedIn && userScore != null)
         {
             _timer += Time.deltaTime;
             if(_timer > scoreSaveInterval)
@@ -145,9 +140,9 @@ public class restClient : MonoBehaviour
                 userScore[0].locationX = gridLogic.PlayerPosX;
                 userScore[0].locationY = gridLogic.PlayerPosY;
                 userScore[0].currentscore = GridLogic.PlayerScore;
-                Debug.Log("I'm trying to save the score.");
                 _timer = 0;
                 StartCoroutine(SaveScore());
+                Debug.Log("I tried to save the score.");
             }
         }
     }
@@ -162,7 +157,6 @@ public class restClient : MonoBehaviour
     {
         StartCoroutine(Login(usernameField.text, passwordField.text));
         //StartCoroutine(PollThreads());
-        //StartCoroutine(PollUsers());
     }
 
     public void PlayOffline()
@@ -212,7 +206,7 @@ public class restClient : MonoBehaviour
         if (www.result != UnityWebRequest.Result.Success)
         {
             var text = www.downloadHandler.text;
-            Debug.Log(baseurl + "/scores");
+            Debug.Log(baseurl + "/scores/" + currUser[0].id);
             Debug.Log(www.error);
             Debug.Log(text);
             // If we found no user score, we create one. This is very insecure and blaa blaa, but it's how this is supposed to work now.
@@ -225,16 +219,20 @@ public class restClient : MonoBehaviour
             loggedIn = true;
             string jsonString = fixJson(text);
             userScore = JsonHelper.FromJson<Score>(jsonString);
+            GridLogic.PlayerScore = userScore[0].currentscore;
+            gridLogic.PlayerPosX = userScore[0].locationX;
+            gridLogic.PlayerPosY = userScore[0].locationY;
         }
     }
 
     IEnumerator CreateUserScore()
     {
         while (!loggedIn) yield return new WaitForSeconds(5);
-        userScore[0] = new Score();
-        userScore[0].userid = currUser[0].id;
+        //userScore[0] = new Score();
+        //userScore[0].userid = currUser[0].id;
+        Debug.Log("Trying to create new user score.");
 
-        UnityWebRequest www = UnityWebRequest.Post(baseurl + "/scores", JsonHelper.ToJson<Score>(userScore), "application/json");
+        UnityWebRequest www = UnityWebRequest.Post(baseurl + "/scores/" + currUser[0].id, JsonHelper.ToJson<Score>(userScore), "application/json");
         yield return www.SendWebRequest();
         if (www.result != UnityWebRequest.Result.Success)
         {
@@ -248,13 +246,31 @@ public class restClient : MonoBehaviour
             var text = www.downloadHandler.text;
             Debug.Log("New score created: " + text);
             loggedIn = true;
+            // Now that we created the score, we need to get it. This is a very dangerous way to make this, because it loops, but there's kind of too much
+            // to do already, so I'm not sweating the details.
+            StartCoroutine(GetUserScore());
         }
     }
 
     IEnumerator SaveScore()
     {
         while (!loggedIn) yield return new WaitForSeconds(2);
-        UnityWebRequest www = UnityWebRequest.Put(baseurl + "/scores", JsonHelper.ToJson<Score>(userScore));
+        UnityWebRequest www = UnityWebRequest.Put(baseurl + "/scores/" + currUser[0].id, JsonHelper.ToJson<Score>(userScore));
+        yield return www.SendWebRequest();
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log(baseurl + "/scores/" + currUser[0].id);
+            Debug.Log(www.error);
+            Debug.Log(text);
+        }
+        else
+        {
+            var text = www.downloadHandler.text;
+            // This doesn't actually check if the score was updated, but rather if we found the score we wanted to update.
+            Debug.Log("Updated score was found: " + text);
+            loggedIn = true;
+        }
     }
 
     // perform asynchronnous polling of threads information every X seconds after login succesful
@@ -284,6 +300,7 @@ public class restClient : MonoBehaviour
         
     }
 
+    // I'm not using this for anything.
     // perform asynchronnous polling of users information every X seconds after login succesfull
     IEnumerator PollUsers()
     {

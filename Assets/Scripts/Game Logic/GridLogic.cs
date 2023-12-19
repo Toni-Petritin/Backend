@@ -5,7 +5,7 @@ using UnityEngine.UIElements;
 
 public class GridLogic : MonoBehaviour
 {
-    public static int PlayerScore { get; private set; } = 0;
+    public static int PlayerScore = 0;
     private float runningScoreInterval = 0;
 
     public GameObject TileObject;
@@ -15,8 +15,8 @@ public class GridLogic : MonoBehaviour
     [SerializeField] private GameObject[,] tiles = new GameObject[Width, Height];
     private readonly float[,] tileValue = new float[Width, Height];
 
-    public int PlayerPosX { get; private set; }
-    public int PlayerPosY { get; private set; }
+    public int PlayerPosX;
+    public int PlayerPosY;
     private int prevPosX = 0;
     private int prevPosY = 0;
     private float playerValue;
