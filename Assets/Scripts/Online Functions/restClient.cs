@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using TMPro;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -111,6 +112,7 @@ public class restClient : MonoBehaviour
     public static bool offlinePlay { get; private set; } = false;
     private bool objsInited = false;
 
+    // Login panel.
     [SerializeField] private GameObject loginScreen;
     [SerializeField] private TMP_InputField usernameField;
     [SerializeField] private TMP_InputField passwordField;
@@ -119,12 +121,20 @@ public class restClient : MonoBehaviour
 
     [SerializeField] private GridLogic gridLogic;
 
+    // GameMenu panel.
+    [SerializeField] private TMP_InputField commandInput;
+    [SerializeField] private TMP_InputField commParamInput;
+    [SerializeField] private TextMeshProUGUI commandOutput;
+
+
     // User information.
     public User[] currUser;
     public Score[] userScore;
 
     // Database information.
-    public User[] users; // array representing copy of the database (as the backend server provides)
+    public User[] users;
+    public Thread[] threads;
+    public Message[] messages;
 
     private float _timer;
     private float scoreSaveInterval = 2;
@@ -142,7 +152,6 @@ public class restClient : MonoBehaviour
                 userScore[0].currentscore = GridLogic.PlayerScore;
                 _timer = 0;
                 StartCoroutine(SaveScore());
-                Debug.Log("I tried to save the score.");
             }
         }
     }
@@ -156,7 +165,6 @@ public class restClient : MonoBehaviour
     public void LoginHelper()
     {
         StartCoroutine(Login(usernameField.text, passwordField.text));
-        //StartCoroutine(PollThreads());
     }
 
     public void PlayOffline()
@@ -273,31 +281,94 @@ public class restClient : MonoBehaviour
         }
     }
 
+    public void MenuCommandReader()
+    {
+        // Only active while logged in.
+        if (!loggedIn)
+            return;
+
+        // Will read commands from commandInput text field and sends commParamInput as a parameter to whatever backend function we need.
+        // The relevant information from a successful command are written into commandOutput text field.
+        switch(commandInput.text)
+        {
+            case "get threads":
+                StartCoroutine(PollThreads());
+                break;
+            case "get thread messages":
+                int value;
+
+                if (int.TryParse(commParamInput.text, out value))
+                {
+                    StartCoroutine(PollThreadMessages(value));
+                }
+                else
+                {
+                    commandOutput.text = "Invalid parameter.\nTry giving integer value.";
+                }
+                break;
+            default:
+                commandOutput.text = "Error: unknown command!";
+                break;
+        }
+    }
+
     // perform asynchronnous polling of threads information every X seconds after login succesful
     IEnumerator PollThreads()
     {
         while(!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
 
-        while (true){
-            UnityWebRequest www = UnityWebRequest.Get(baseurl + "/threads");
-            yield return www.SendWebRequest();
-            if (www.result != UnityWebRequest.Result.Success)
-            {
-                var text = www.downloadHandler.text;
-                Debug.Log(baseurl+ "/threads");
-                Debug.Log(www.error);
-                Debug.Log(text);
-            }
-            else
-            {
-                var text = www.downloadHandler.text;
-                Debug.Log("threads download complete: "+text);
-                loggedIn = true;
-                // TODO: handle messages JSON somehow
-            }
-            yield return new WaitForSeconds(5); 
+        UnityWebRequest www = UnityWebRequest.Get(baseurl + "/threads");
+        yield return www.SendWebRequest();
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log(baseurl + "/threads");
+            Debug.Log(www.error);
+            Debug.Log(text);
         }
+        else
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log("threads download complete: " + text);
+            loggedIn = true;
+            // handle messages JSON
+            string jsonString = fixJson(text); // add Items: in front of the json array
+            threads = JsonHelper.FromJson<Thread>(jsonString); // convert json to User-array (public users) // overwrite data each update!
+            commandOutput.text = "";
+            foreach (Thread thr in threads)
+            {
+                commandOutput.text += "ID: " + thr.id + "\nAuthor: " + thr.author + "\nTitle: " + thr.title + "\n";
+            }
+        }
+    }
+
+    IEnumerator PollThreadMessages(int threadID)
+    {
+        while (!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
         
+        UnityWebRequest www = UnityWebRequest.Get(baseurl + "/threads/" + threadID);
+        yield return www.SendWebRequest();
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log(baseurl + "/threads/" + threadID);
+            Debug.Log(www.error);
+            Debug.Log(text);
+        }
+        else
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log("thread download complete: " + text);
+            loggedIn = true;
+            // handle messages JSON
+            string jsonString = fixJson(text); // add Items: in front of the json array
+            messages = JsonHelper.FromJson<Message>(jsonString); // convert json to User-array (public users) // overwrite data each update!
+            commandOutput.text = "";
+            foreach (Message msg in messages)
+            {
+                commandOutput.text += "ID: " + msg.id + "\nAuthor: " + msg.author + "\nContent: " + msg.content + "\n";
+            }
+        }
     }
 
     // I'm not using this for anything.
