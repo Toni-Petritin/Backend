@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Threading;
 using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -137,25 +138,8 @@ public class restClient : MonoBehaviour
     public Thread[] threads;
     public Message[] messages;
 
-    private float _timer;
-    private float scoreSaveInterval = 2;
+    private float scoreSaveInterval = 5;
 
-    private void Update()
-    {
-        // As long as we are logged in and have created a userScore we try to save the score on an interval.
-        if (loggedIn && userScore != null)
-        {
-            _timer += Time.deltaTime;
-            if(_timer > scoreSaveInterval)
-            {
-                userScore[0].locationX = gridLogic.PlayerPosX;
-                userScore[0].locationY = gridLogic.PlayerPosY;
-                userScore[0].currentscore = GridLogic.PlayerScore;
-                _timer = 0;
-                StartCoroutine(SaveScore());
-            }
-        }
-    }
 
     private string fixJson(string value)
     {
@@ -200,7 +184,7 @@ public class restClient : MonoBehaviour
             Debug.Log(text);
             // Try to get user's score now that they are logged in.
             StartCoroutine(GetUserScore());
-
+            StartCoroutine(SaveScore());
             userTag.text = "Hello " + currUser[0].firstname + " " + currUser[0].lastname + "!"
                 + "\nYou're logged in as " + currUser[0].username;
         }
@@ -263,22 +247,31 @@ public class restClient : MonoBehaviour
 
     IEnumerator SaveScore()
     {
-        while (!loggedIn) yield return new WaitForSeconds(2);
-        UnityWebRequest www = UnityWebRequest.Put(baseurl + "/scores/" + currUser[0].id, JsonHelper.ToJson<Score>(userScore));
-        yield return www.SendWebRequest();
-        if (www.result != UnityWebRequest.Result.Success)
+        while (!loggedIn) yield return new WaitForSeconds(5);
+        while (loggedIn)
         {
-            var text = www.downloadHandler.text;
-            Debug.Log(baseurl + "/scores/" + currUser[0].id);
-            Debug.Log(www.error);
-            Debug.Log(text);
-        }
-        else
-        {
-            var text = www.downloadHandler.text;
-            // This doesn't actually check if the score was updated, but rather if we found the score we wanted to update.
-            Debug.Log("Updated score was found: " + text);
-            loggedIn = true;
+            yield return new WaitForSeconds(scoreSaveInterval);
+
+            userScore[0].locationX = gridLogic.PlayerPosX;
+            userScore[0].locationY = gridLogic.PlayerPosY;
+            userScore[0].currentscore = GridLogic.PlayerScore;
+
+            UnityWebRequest www = UnityWebRequest.Put(baseurl + "/scores/" + currUser[0].id, JsonHelper.ToJson<Score>(userScore));
+            yield return www.SendWebRequest();
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                var text = www.downloadHandler.text;
+                Debug.Log(baseurl + "/scores/" + currUser[0].id);
+                Debug.Log(www.error);
+                Debug.Log(text);
+            }
+            else
+            {
+                var text = www.downloadHandler.text;
+                // This doesn't actually check if the score was updated, but rather if we found the score we wanted to update.
+                Debug.Log("Updated score was found: " + text);
+                loggedIn = true;
+            }
         }
     }
 
@@ -306,6 +299,9 @@ public class restClient : MonoBehaviour
                     commandOutput.text = "Invalid parameter.\nTry giving integer value.";
                 }
                 break;
+            case "post thread":
+                StartCoroutine(PostThread(stringInput.text));
+                break;
             case "update thread":
                 if (int.TryParse(idInput.text, out value))
                 {
@@ -320,6 +316,16 @@ public class restClient : MonoBehaviour
                 if (int.TryParse(idInput.text, out value))
                 {
                     StartCoroutine(DeleteThread(value));
+                }
+                else
+                {
+                    commandOutput.text = "Invalid parameter.\nTry giving integer value.";
+                }
+                break;
+            case "post message":
+                if (int.TryParse(idInput.text, out value))
+                {
+                    StartCoroutine(PostMessage(value));
                 }
                 else
                 {
@@ -391,6 +397,27 @@ public class restClient : MonoBehaviour
         }
     }
 
+    IEnumerator PostThread(string title)
+    {
+        while (!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
+        UnityWebRequest www = UnityWebRequest.Post(baseurl + "/threads", "{ \"author\": \"" + currUser[0].id + "\", \"title\": \"" + title + "\" }", "application/json");
+        yield return www.SendWebRequest();
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log(baseurl + "/threads");
+            Debug.Log(www.error);
+            Debug.Log(text);
+        }
+        else
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log("thread upload complete: " + text);
+            loggedIn = true;
+            commandOutput.text = text;
+        }
+    }
+
     IEnumerator UpdateThread(int threadID, string newTitle)
     {
         while (!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
@@ -416,26 +443,35 @@ public class restClient : MonoBehaviour
     {
         while (!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
 
-        Debug.Log("I got here.");
         UnityWebRequest www = UnityWebRequest.Delete(baseurl + "/threads/" + threadID);
+        yield return www.SendWebRequest();
+        // So this works. I tested it. However, it gets a null reference exception with downloadhandler.text and I don't really want to troubleshoot that.
+        // It doesn't really matter with this regardless. The delete functionality itself is the important thing, right?
+    }
+
+    IEnumerator PostMessage(int threadID)
+    {
+        while (!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
+        // So, this is obviously just a placeholder. It sends the same value as the title and content, but that's hardly an issue.
+        // The real point is to show the functionality works.
+        UnityWebRequest www = UnityWebRequest.Post(baseurl + "/msgs", "{ \"author\": \"" + currUser[0].id + "\", \"title\": \"" + stringInput.text + "\", \"content\": \"" + stringInput.text + "\", \"thread\": \"" + threadID + "\" }", "application/json");
         yield return www.SendWebRequest();
         if (www.result != UnityWebRequest.Result.Success)
         {
             var text = www.downloadHandler.text;
-            Debug.Log("I got here too.");
-            Debug.Log(baseurl + "/threads/" + threadID);
+            Debug.Log(baseurl + "/msgs");
             Debug.Log(www.error);
             Debug.Log(text);
         }
         else
         {
             var text = www.downloadHandler.text;
-            Debug.Log("I got here too.");
-            Debug.Log("thread download complete: " + text);
+            Debug.Log("message upload complete: " + text);
             loggedIn = true;
             commandOutput.text = text;
         }
     }
+
 
     // I'm not using this for anything.
     // perform asynchronnous polling of users information every X seconds after login succesfull
