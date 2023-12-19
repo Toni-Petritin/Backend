@@ -286,6 +286,7 @@ public class restClient : MonoBehaviour
         int value;
         switch (commandInput.text)
         {
+            // Adding more functions to these is pretty much just copy paste at this point. So, I'm implementing only these 7 different functions.
             case "get threads":
                 StartCoroutine(PollThreads());
                 break;
@@ -316,6 +317,16 @@ public class restClient : MonoBehaviour
                 if (int.TryParse(idInput.text, out value))
                 {
                     StartCoroutine(DeleteThread(value));
+                }
+                else
+                {
+                    commandOutput.text = "Invalid parameter.\nTry giving integer value.";
+                }
+                break;
+            case "get message":
+                if (int.TryParse(idInput.text, out value))
+                {
+                    StartCoroutine(GetMessage(value));
                 }
                 else
                 {
@@ -447,6 +458,35 @@ public class restClient : MonoBehaviour
         yield return www.SendWebRequest();
         // So this works. I tested it. However, it gets a null reference exception with downloadhandler.text and I don't really want to troubleshoot that.
         // It doesn't really matter with this regardless. The delete functionality itself is the important thing, right?
+    }
+
+    IEnumerator GetMessage(int msgID)
+    {
+        while (!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
+
+        UnityWebRequest www = UnityWebRequest.Get(baseurl + "/msgs/" + msgID);
+        yield return www.SendWebRequest();
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log(baseurl + "/msgs/" + msgID);
+            Debug.Log(www.error);
+            Debug.Log(text);
+        }
+        else
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log("message download complete: " + text);
+            loggedIn = true;
+            // handle messages JSON
+            string jsonString = fixJson(text); // add Items: in front of the json array
+            messages = JsonHelper.FromJson<Message>(jsonString); // convert json to User-array (public users) // overwrite data each update!
+            commandOutput.text = "";
+            foreach (Message msg in messages)
+            {
+                commandOutput.text += "ID: " + msg.id + "\nAuthor: " + msg.author + "\nTitle: " + msg.title + "\nContent: " + msg.content + "\n";
+            }
+        }
     }
 
     IEnumerator PostMessage(int threadID)
