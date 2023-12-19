@@ -121,10 +121,11 @@ public class restClient : MonoBehaviour
 
     [SerializeField] private GridLogic gridLogic;
 
-    // GameMenu panel.
-    [SerializeField] private TMP_InputField commandInput;
-    [SerializeField] private TMP_InputField commParamInput;
-    [SerializeField] private TextMeshProUGUI commandOutput;
+    // GameMenu panel. In game, while logged in, press esc to get access to this.
+    [SerializeField] private TMP_InputField commandInput; // Directive to create a poll.
+    [SerializeField] private TMP_InputField idInput; // Whenever we need an additional id for the command.
+    [SerializeField] private TMP_InputField stringInput; // Whenever we need an extra string for the command.
+    [SerializeField] private TextMeshProUGUI commandOutput; // This will output some relevant information from the database as per commandInput.
 
 
     // User information.
@@ -289,17 +290,36 @@ public class restClient : MonoBehaviour
 
         // Will read commands from commandInput text field and sends commParamInput as a parameter to whatever backend function we need.
         // The relevant information from a successful command are written into commandOutput text field.
-        switch(commandInput.text)
+        int value;
+        switch (commandInput.text)
         {
             case "get threads":
                 StartCoroutine(PollThreads());
                 break;
             case "get thread messages":
-                int value;
-
-                if (int.TryParse(commParamInput.text, out value))
+                if (int.TryParse(idInput.text, out value))
                 {
                     StartCoroutine(PollThreadMessages(value));
+                }
+                else
+                {
+                    commandOutput.text = "Invalid parameter.\nTry giving integer value.";
+                }
+                break;
+            case "update thread":
+                if (int.TryParse(idInput.text, out value))
+                {
+                    StartCoroutine(UpdateThread(value, stringInput.text));
+                }
+                else
+                {
+                    commandOutput.text = "Invalid parameter.\nTry giving integer value.";
+                }
+                break;
+            case "delete thread":
+                if (int.TryParse(idInput.text, out value))
+                {
+                    StartCoroutine(DeleteThread(value));
                 }
                 else
                 {
@@ -368,6 +388,52 @@ public class restClient : MonoBehaviour
             {
                 commandOutput.text += "ID: " + msg.id + "\nAuthor: " + msg.author + "\nContent: " + msg.content + "\n";
             }
+        }
+    }
+
+    IEnumerator UpdateThread(int threadID, string newTitle)
+    {
+        while (!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
+        UnityWebRequest www = UnityWebRequest.Put(baseurl + "/threads/" + threadID, "{ \"title\": \"" + newTitle  + "\" }");
+        yield return www.SendWebRequest();
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log(baseurl + "/threads/" + threadID);
+            Debug.Log(www.error);
+            Debug.Log(text);
+        }
+        else
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log("thread download complete: " + text);
+            loggedIn = true;
+            commandOutput.text = text;
+        }
+    }
+
+    IEnumerator DeleteThread(int threadID)
+    {
+        while (!loggedIn) yield return new WaitForSeconds(10); // wait for login to happen
+
+        Debug.Log("I got here.");
+        UnityWebRequest www = UnityWebRequest.Delete(baseurl + "/threads/" + threadID);
+        yield return www.SendWebRequest();
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log("I got here too.");
+            Debug.Log(baseurl + "/threads/" + threadID);
+            Debug.Log(www.error);
+            Debug.Log(text);
+        }
+        else
+        {
+            var text = www.downloadHandler.text;
+            Debug.Log("I got here too.");
+            Debug.Log("thread download complete: " + text);
+            loggedIn = true;
+            commandOutput.text = text;
         }
     }
 
